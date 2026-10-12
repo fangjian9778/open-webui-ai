@@ -38,7 +38,7 @@ jobs:
 
       - name: Build portable exe
         run: |
-          npm run build:portable
+          npm run build
           Get-ChildItem -Path release -Filter "*.exe" | Select-Object Name, Length
 
       - name: Generate SHA256 checksum
