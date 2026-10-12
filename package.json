@@ -1,6 +1,6 @@
 {
   "name": "open-webui-ai",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "内网大模型桌面客户端 - Electron + Vue 3",
   "main": "dist-electron/main.js",
   "author": "Open WebUI AI",
@@ -13,11 +13,10 @@
     "build": "npm run build:renderer && npm run build:electron && electron-builder --win portable",
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "postinstall": "electron-builder install-app-deps || true",
     "preview": "vite preview"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^10.1.0",
     "cheerio": "^1.0.0",
     "iconv-lite": "^0.6.3",
     "marked": "^14.1.2",
@@ -32,7 +31,7 @@
     "concurrently": "^9.0.1",
     "cross-env": "^7.0.3",
     "electron": "22.3.27",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "^26.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vue": "^3.5.11",
@@ -59,9 +58,7 @@
       "target": [
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "artifactName": "${productName}-${version}-win-x64-portable.${ext}"

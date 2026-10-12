@@ -5,17 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: '版本号（可选，默认用 tag）'
-        required: false
-        default: ''
 
 jobs:
   build:
     name: Build Portable EXE (Windows x64)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout source
@@ -24,21 +19,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      # 配置 Electron 下载镜像（加速）
+      - name: Configure Electron mirror
+        shell: pwsh
+        run: |
+          "$env:ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+          "$env:ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-      - name: Build renderer
+      # 跳过 postinstall 里容易出错的 install-app-deps，改为后面显式调用
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # 显式 rebuild native deps 到 Electron 的 Node ABI
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps
+
+      - name: Build renderer (Vite)
         run: npm run build:renderer
 
-      - name: Build electron main process
+      - name: Build electron main process (TSC)
         run: npm run build:electron
 
+      # electron-builder --win portable 会自动用 app-builder 打包，
+      # 并依赖上一步 install-app-deps 已经把 .node 编译好
       - name: Build portable exe
         run: |
-          npm run build
+          npx electron-builder --win portable --x64
           Get-ChildItem -Path release -Filter "*.exe" | Select-Object Name, Length
 
       - name: Generate SHA256 checksum
@@ -56,20 +65,25 @@ jobs:
           body: |
             ## OpenWebUI AI v${{ github.ref_name }}
 
-            内网大模型桌面客户端
+            内网大模型桌面客户端（免安装 portable exe）
 
             ### 下载
-            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe** - Windows 便携版（免安装）
-            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe.sha256** - SHA256 校验文件
+            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe** — Windows Server 2016 / 10 / 11（双击即用，免安装）
+            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe.sha256** — SHA256 校验文件
+
+            ### 使用
+            1. 下载 exe 到本地任意目录
+            2. 双击运行
+            3. 首次启动在「设置」→「AI 模型」里添加内网大模型接口配置
+            4. 数据（SQLite 历史、模型配置）自动保存在 exe 同目录 `data/` 下
 
             ### 功能
-            - 多模型配置，Bearer Token 加密存储
-            - 多会话管理，历史独立
-            - 支持 IPv4/IPv6/HTTP/HTTPS
-            - 自动输入规范化（多行 → 单行）
-            - 输出清洗（去除 ??、** 等）
+            - 多模型配置，Bearer Token AES-256-GCM 加密存储
+            - 多会话管理，搜索、置顶、导出 JSON/MD/TXT
+            - 支持 IPv4 / IPv6 / HTTP / HTTPS 接口
+            - 输入自动规范化（多行→单行），输出自动清洗（??/**/-）
             - 本地附件文本提取（txt/yml/sql/html/xlsx 等）
-            - 支持 Windows Server 2016
+            - 白天/黑夜主题 + 科幻粒子背景（可关闭）
           files: |
             release/*.exe
             release/*.sha256
