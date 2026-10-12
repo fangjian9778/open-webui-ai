@@ -1,0 +1,77 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（可选，默认用 tag）'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Build Portable EXE (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build:renderer
+
+      - name: Build electron main process
+        run: npm run build:electron
+
+      - name: Build portable exe
+        run: |
+          npm run build:portable
+          Get-ChildItem -Path release -Filter "*.exe" | Select-Object Name, Length
+
+      - name: Generate SHA256 checksum
+        run: |
+          $exePath = (Get-ChildItem -Path release -Filter "*.exe")[0].FullName
+          $exeName = Split-Path $exePath -Leaf
+          $hash = (Get-FileHash -Algorithm SHA256 $exePath).Hash.ToLower()
+          "$hash  $exeName" | Out-File -FilePath "$exePath.sha256" -Encoding ascii
+          Get-Content "$exePath.sha256"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: OpenWebUI AI ${{ github.ref_name }}
+          body: |
+            ## OpenWebUI AI v${{ github.ref_name }}
+
+            内网大模型桌面客户端
+
+            ### 下载
+            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe** - Windows 便携版（免安装）
+            - **open-webui-ai-${{ github.ref_name }}-win-x64-portable.exe.sha256** - SHA256 校验文件
+
+            ### 功能
+            - 多模型配置，Bearer Token 加密存储
+            - 多会话管理，历史独立
+            - 支持 IPv4/IPv6/HTTP/HTTPS
+            - 自动输入规范化（多行 → 单行）
+            - 输出清洗（去除 ??、** 等）
+            - 本地附件文本提取（txt/yml/sql/html/xlsx 等）
+            - 支持 Windows Server 2016
+          files: |
+            release/*.exe
+            release/*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
