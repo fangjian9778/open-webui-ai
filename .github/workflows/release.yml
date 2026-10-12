@@ -10,7 +10,7 @@ jobs:
   build:
     name: Build Portable EXE (Windows x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - name: Checkout source
@@ -31,10 +31,8 @@ jobs:
       - name: Build electron main process (TSC)
         run: npm run build:electron
 
-      # electron-builder 会自动:
-      #   1. rebuild better-sqlite3 native addon 到 Electron 的 Node ABI
-      #   2. 读取 asarUnpack 配置把 .node 文件解包出来
-      #   3. 生成单个 portable exe
+      # sql.js 是纯 WASM，零 native module，
+      # electron-builder 直接打包，不需要任何 rebuild
       - name: Build portable exe
         run: npx electron-builder --win portable --x64
 

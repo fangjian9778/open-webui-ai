@@ -57,18 +57,18 @@ function createWindow(): void {
 }
 
 // ─── 初始化服务 ──────────────────────────────────────────────
-function initServices(): void {
+async function initServices(): Promise<void> {
   const paths = AppPaths.getDataDir();
   db = new ChatDatabase(path.join(paths.root, 'conversations.db'));
-  db.init();
+  await db.init(); // sql.js 异步加载 wasm
   apiService = new ApiService();
   loadCleanRules(path.join(paths.root, 'clean-rules.json'));
 }
 
 // ─── App 生命周期 ────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initDataDir();
-  initServices();
+  await initServices();
   createWindow();
 
   app.on('activate', () => {
