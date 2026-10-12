@@ -16,26 +16,14 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '20'
           cache: npm
 
-      # 配置 Electron 下载镜像（加速）
-      - name: Configure Electron mirror
-        shell: pwsh
-        run: |
-          "$env:ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-          "$env:ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-
-      # 跳过 postinstall 里容易出错的 install-app-deps，改为后面显式调用
       - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      # 显式 rebuild native deps 到 Electron 的 Node ABI
-      - name: Rebuild native modules for Electron
-        run: npx electron-builder install-app-deps
+        run: npm ci
 
       - name: Build renderer (Vite)
         run: npm run build:renderer
@@ -43,19 +31,22 @@ jobs:
       - name: Build electron main process (TSC)
         run: npm run build:electron
 
-      # electron-builder --win portable 会自动用 app-builder 打包，
-      # 并依赖上一步 install-app-deps 已经把 .node 编译好
+      # electron-builder 会自动:
+      #   1. rebuild better-sqlite3 native addon 到 Electron 的 Node ABI
+      #   2. 读取 asarUnpack 配置把 .node 文件解包出来
+      #   3. 生成单个 portable exe
       - name: Build portable exe
-        run: |
-          npx electron-builder --win portable --x64
-          Get-ChildItem -Path release -Filter "*.exe" | Select-Object Name, Length
+        run: npx electron-builder --win portable --x64
+
+      - name: List output
+        run: Get-ChildItem -Path release -Filter "*.exe" | Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,1)}}
 
       - name: Generate SHA256 checksum
         run: |
           $exePath = (Get-ChildItem -Path release -Filter "*.exe")[0].FullName
           $exeName = Split-Path $exePath -Leaf
           $hash = (Get-FileHash -Algorithm SHA256 $exePath).Hash.ToLower()
-          "$hash  $exeName" | Out-File -FilePath "$exePath.sha256" -Encoding ascii
+          Set-Content -Path "$exePath.sha256" -Value "$hash  $exeName" -Encoding ascii
           Get-Content "$exePath.sha256"
 
       - name: Create Release
