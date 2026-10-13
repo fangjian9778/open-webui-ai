@@ -1,6 +1,9 @@
 import initSqlJs, { Database as SqliteDatabase, SqlJsStatic } from 'sql.js';
 import * as path from 'path';
 import * as fs from 'fs';
+// require.resolve 在 Electron asar 模式下能正确解析到 node_modules 内的文件
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const WASM_PATH = require.resolve('sql.js/dist/sql-wasm.wasm');
 
 export interface ModelConfig {
   id?: number;
@@ -68,10 +71,12 @@ export class ChatDatabase {
 
   /** 异步初始化：加载 wasm + 读取/创建数据库文件 */
   async init(): Promise<void> {
-    const wasmDir = path.join(__dirname, '..', '..', 'node_modules', 'sql.js', 'dist');
-    this.SQL = await initSqlJs({
-      locateFile: (file: string) => path.join(wasmDir, file),
-    });
+    // 用 wasmBinary 直接把 wasm 读到内存传给 sql.js，
+    // 彻底绕过 asar / fetch / locateFile 路径解析问题
+    const wasmBinary = fs.readFileSync(WASM_PATH);
+    // fs.readFileSync 返回 Buffer，sql.js 要 ArrayBuffer；运行时 Buffer 兼容 Uint8Array
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.SQL = await initSqlJs({ wasmBinary: wasmBinary as any });
 
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
 
